@@ -1,0 +1,5 @@
+IntelHex/.vs/*
+IntelHex/IntelHexLib/bin
+IntelHex/IntelHexLib/obj
+IntelHex/Example/bin
+IntelHex/Example/obj
