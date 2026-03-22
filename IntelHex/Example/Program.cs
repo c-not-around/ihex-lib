@@ -9,7 +9,7 @@ namespace Example
         static void Main(string[] args)
         {
             #region ATtiny2313 dump example
-            ushort[] flash = IntelHex.ReadWods(@"TestData\t2313_flash.hex", 1024);
+            ushort[] flash = IntelHex.ReadWords(@"TestData\t2313_flash.hex", 1024);
             IntelHex.SaveWords(@"TestData\f_2313.hex", flash);
 
             byte[] eeprom = IntelHex.ReadBytes(@"TestData\t2313_eep.hex", 256);

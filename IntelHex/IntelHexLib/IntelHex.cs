@@ -27,7 +27,7 @@ namespace System.IntelHex
         public long Size;
     }
 
-    public class IntelHex
+    public static class IntelHex
     {
         #region Parse
         private static int HexParse(string image)
@@ -260,7 +260,7 @@ namespace System.IntelHex
             return result;
         }
 
-        public static ushort[] ReadWods(string fname, long size, ushort empty = 0xFFFF)
+        public static ushort[] ReadWords(string fname, long size, ushort empty = 0xFFFF)
         {
             ushort[] result = new ushort[size];
             for (long i = 0; i < size; i++)
