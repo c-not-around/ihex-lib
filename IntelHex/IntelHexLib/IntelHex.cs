@@ -178,8 +178,10 @@ namespace System.IntelHex
             while (count-- > 0)
             {
                 ushort w = dump[index++];
-                line    += w.ToString("X4");
-                crc     += (byte)((w >> 8) + (w & 0xFF));
+                byte   l = (byte)(w & 0xFF);
+                byte   h = (byte)(w >> 8);
+                line    += $"{l:X2}{h:X2}";
+                crc     += (byte)(l + h);
             }
 
             crc = (byte)((byte)0 - crc);
@@ -303,7 +305,7 @@ namespace System.IntelHex
                         {
                             for (int i = 0; i < count; i += 2)
                             {
-                                result[offset++] = (ushort)((record.Data[i+0] << 8) | record.Data[i+1]);
+                                result[offset++] = (ushort)((record.Data[i+1] << 8) | record.Data[i+0]);
                             }
                         }
                         else
@@ -484,3 +486,74 @@ namespace System.IntelHex
         #endregion
     }
 }
+
+
+/*
+public enum IntelHexSegmentType
+{
+    Byte,
+    Word
+}
+
+public struct IntelHexSegmentInfo
+{
+    public IntelHexSegmentType Type;
+    public long                Offset;
+    public long                Size;
+    public ushort              Empty;
+}
+
+public abstract class IntelHexSegment<T>
+{
+    public long Offset { get; protected set; }
+
+    public abstract T[] Data { get; }
+}
+
+public class IntelHexByteSegment : IntelHexSegment<byte>
+{
+    private byte[] _Data;
+
+    public IntelHexByteSegment(IntelHexSegmentInfo info)
+    {
+        this.Offset = info.Offset;
+        this._Data  = new byte[info.Size];
+
+        for (int i = 0; i < info.Size; i++)
+        {
+            _Data[i] = (byte)info.Empty;
+        }
+    }
+
+    public override byte[] Data => _Data;
+    
+    public byte this[int index] => _Data[index];
+}
+
+public class IntelHexWordSegment : IntelHexSegment<ushort>
+{
+    private ushort[] _Data;
+
+    public IntelHexWordSegment(IntelHexSegmentInfo info)
+    {
+        this.Offset = info.Offset;
+        this._Data = new ushort[info.Size];
+
+        for (int i = 0; i < info.Size; i++)
+        {
+            _Data[i] = info.Empty;
+        }
+    }
+
+    public override ushort[] Data => _Data;
+
+    public ushort this[int index] => _Data[index];
+
+    public byte GetByte(int index)
+    {
+        ushort w = _Data[index>>1];
+        return (byte)((index & 1) == 0 ? w & 0xFF : w >> 8); 
+    }
+}
+
+*/
