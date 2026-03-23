@@ -232,17 +232,17 @@ namespace System.IntelHex
 
                 if (record.Type == IntelHexRecordType.Data)
                 {
-                    int count = record.Data.Length;
-                    if ((address + count) <= size)
+                    int  count  = record.Data.Length;
+                    long offset = address + record.Address;
+
+                    if ((offset + count) <= size)
                     {
-                        Array.Copy(record.Data, 0, result, address, count);
+                        Array.Copy(record.Data, 0, result, offset, count);
                     }
                     else
                     {
                         throw new Exception($"\"{fname}\" - file read error: line{line} dump overflow: cant copy {count} bytes by offset {address}.");
                     }
-
-                    address += count;
                 }
                 else if (record.Type == IntelHexRecordType.ExtendedLinearAddress)
                 {
@@ -299,7 +299,7 @@ namespace System.IntelHex
 
                     if ((count & 1) == 0)
                     {
-                        long offset = address / 2;
+                        long offset = (address + record.Address) / 2;
 
                         if ((offset + (count / 2)) <= size)
                         {
@@ -317,8 +317,6 @@ namespace System.IntelHex
                     {
                         throw new Exception($"line{line} - {count} incorrect count for word dump.");
                     }
-
-                    address += count;
                 }
                 else if (record.Type == IntelHexRecordType.ExtendedLinearAddress)
                 {
@@ -377,7 +375,7 @@ namespace System.IntelHex
 
                 if (record.Type == IntelHexRecordType.Data)
                 {
-                    long offset = address - regions[region].Offset;
+                    long offset = address + record.Address - regions[region].Offset;
                     while (offset < 0 || offset > regions[region].Size)
                     {
                         if (++region == regions.Length)
@@ -397,8 +395,6 @@ namespace System.IntelHex
                     {
                         throw new Exception($"Region[{region}] overflow: cant copy {count} bytes by offset {offset}.");
                     }
-
-                    address += count;
                 }
                 else if (record.Type == IntelHexRecordType.ExtendedLinearAddress)
                 {
