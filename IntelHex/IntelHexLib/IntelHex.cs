@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 
 
 namespace System.IntelHex
@@ -355,6 +356,9 @@ namespace System.IntelHex
                 }
             }
 
+            long MinOffset = regions.Min(r => r.Offset);
+            long MaxOffset = regions.Max(r => r.Offset + r.Size);
+
             string[] lines;
             try
             {
@@ -381,7 +385,15 @@ namespace System.IntelHex
 
                 if (record.Type == IntelHexRecordType.Data)
                 {
-                    long offset = address + record.Address - regions[region].Offset;
+                    long a     = address + record.Address;
+                    int  count = record.Data.Length;
+
+                    if (a < MinOffset || (a + count) > MaxOffset)
+                    {
+                        throw new Exception($"Offset 0x{a} does not belong to any of the specified regions.");
+                    }
+
+                    long offset = a - regions[region].Offset;
                     while (offset < 0 || offset > regions[region].Size)
                     {
                         if (++region == regions.Length)
@@ -389,10 +401,10 @@ namespace System.IntelHex
                             region = 0;
                         }
 
-                        offset = address - regions[region].Offset;
+                        offset = a - regions[region].Offset;
                     }
 
-                    int count = record.Data.Length;
+                    
                     if ((offset + count) <= regions[region].Size)
                     {
                         Array.Copy(record.Data, 0, result[region], offset, count);
