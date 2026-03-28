@@ -25,6 +25,12 @@ namespace System.IntelHex
     {
         public long Offset;
         public long Size;
+
+        public IntelHexRegion(long Offset, long Size)
+        {
+            this.Offset = Offset;
+            this.Size   = Size;
+        }
     }
 
     public static class IntelHex
