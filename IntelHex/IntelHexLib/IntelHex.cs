@@ -5,6 +5,9 @@ using System.Linq;
 
 namespace System.IntelHex
 {
+    /// <summary>
+    /// Record types defined in the IntelHex format.
+    /// </summary>
     public enum IntelHexRecordType : byte
     {
         Data                   = 0,
@@ -15,6 +18,9 @@ namespace System.IntelHex
         StartLinearAddress     = 5
     };
 
+    /// <summary>
+    /// Represents IntelHex record.
+    /// </summary>
     public struct IntelHexRecord
     {
         public IntelHexRecordType Type;
@@ -22,11 +28,25 @@ namespace System.IntelHex
         public byte[]             Data;
     }
 
+    /// <summary>
+    /// Represents the parameters of a segment in a segmented address space.
+    /// </summary>
     public struct IntelHexRegion
     {
+        /// <summary>
+        /// The offset of the segment relative to address zero of the segmented address space.
+        /// </summary>
         public long Offset;
+        /// <summary>
+        /// The size of a segment relative to address zero of the segmented address space.
+        /// </summary>
         public long Size;
 
+        /// <summary>
+        /// Initializes a new IntelHexRegion object using the given Offset and size Size.
+        /// </summary>
+        /// <param name="Offset">The offset of the segment relative to address zero of the segmented address space.</param>
+        /// <param name="Size">The size of a segment relative to address zero of the segmented address space.</param>
         public IntelHexRegion(long Offset, long Size)
         {
             this.Offset = Offset;
@@ -34,6 +54,10 @@ namespace System.IntelHex
         }
     }
 
+    /// <summary>
+    /// Contains methods for working with files in the IntelHex format. 
+    /// Reading and writing both individual IntelHex records and entire dumps.
+    /// </summary>
     public static class IntelHex
     {
         #region Parse
@@ -49,6 +73,12 @@ namespace System.IntelHex
             }
         }
 
+        /// <summary>
+        /// Decodes the string representation of an IntelHex Record.
+        /// </summary>
+        /// <param name="line">IntelHex Record Image String.</param>
+        /// <returns>A IntelHexRecord object representing a recognized IntelHex record.</returns>
+        /// <exception cref="Exception">If the input string does not conform to the IntelHex format, an appropriate exception is thrown.</exception>
         public static IntelHexRecord Parse(string line)
         {
             IntelHexRecord record = new IntelHexRecord();
@@ -151,13 +181,23 @@ namespace System.IntelHex
         #endregion
 
         #region Save line
+        /// <summary>
+        /// Generates a record with IntelHex data as a string.
+        /// Helper function.
+        /// </summary>
+        /// <param name="address">Data offset in the generated record.</param>
+        /// <param name="dump">Byte array - data source.</param>
+        /// <param name="index">The index in the source array from which the data will be taken.</param>
+        /// <param name="count">The number of bytes from which an IntelHex record must be formed.</param>
+        /// <returns>The term representing the generated IntelHex record.</returns>
+        /// <exception cref="Exception">The number of data bytes specified is more than 255.</exception>
         public static string SaveDataBytes(ushort address, byte[] dump, long index, int count)
         {
             if (count > 255 || count < 0)
             {
                 throw new Exception($"incorrect byte count: {count}");
             }
-
+            
             string line = $":{count:X2}{address:X4}{(byte)IntelHexRecordType.Data:X2}";
             byte   crc  = (byte)(count + (address>>8) + (address&0xFF) + (byte)IntelHexRecordType.Data);
 
@@ -172,6 +212,16 @@ namespace System.IntelHex
             return line + crc.ToString("X2");
         }
 
+        /// <summary>
+        /// Generates a record with IntelHex data as a string.
+        /// Helper function.
+        /// </summary>
+        /// <param name="address">Data offset in the generated record. The byte address is specified.</param>
+        /// <param name="dump">Array of word - data source.</param>
+        /// <param name="index">The index in the source array from which the data will be taken.</param>
+        /// <param name="count">The number of words from which an IntelHex record must be formed.</param>
+        /// <returns>The term representing the generated IntelHex record.</returns>
+        /// <exception cref="Exception">The number of data bytes specified is more than 127.</exception>
         public static string SaveDataWords(ushort address, ushort[] dump, long index, int count)
         {
             if (count > 127 || count < 0)
@@ -196,6 +246,12 @@ namespace System.IntelHex
             return line + crc.ToString("X2");
         }
 
+        /// <summary>
+        /// Generates an IntelHex record of type "Extended Linear Address" as a string.
+        /// Helper function.
+        /// </summary>
+        /// <param name="address">Extended Line Address Value (32-bit address high-order part).</param>
+        /// <returns>The term representing the generated IntelHex record.</returns>
         public static string SaveAddress(ushort address)
         {
             byte ext = (byte)IntelHexRecordType.ExtendedLinearAddress;
@@ -206,6 +262,13 @@ namespace System.IntelHex
         #endregion
 
         #region Read
+        /// <summary>
+        /// Reads a byte array of data from the specified file in ItelHex format.
+        /// </summary>
+        /// <param name="fname">Specifies the name of the file containing the data.</param>
+        /// <param name="size">The maximum expected size of the data array.</param>
+        /// <returns>Array of read data bytes.</returns>
+        /// <exception cref="Exception"></exception>
         public static byte[] ReadBytes(string fname, long size)
         {
             byte[] result = new byte[size];
@@ -269,6 +332,14 @@ namespace System.IntelHex
             return result;
         }
 
+        /// <summary>
+        /// Reads an word array of data from the specified file in ItelHex format.
+        /// </summary>
+        /// <param name="fname">Specifies the name of the file containing the data.</param>
+        /// <param name="size">The maximum expected size of the data array. Specified as a number of 16-bit words.</param>
+        /// <param name="empty">Specifies a 16-bit value that will be used to fill the elements of the output array of words for which data is missing from the file.</param>
+        /// <returns>An array of read data bytes as an array of 16-bit words.</returns>
+        /// <exception cref="Exception"></exception>
         public static ushort[] ReadWords(string fname, long size, ushort empty = 0xFFFF)
         {
             ushort[] result = new ushort[size];
@@ -343,6 +414,13 @@ namespace System.IntelHex
             return result;
         }
 
+        /// <summary>
+        /// Reads a complex dump containing segmented data.
+        /// </summary>
+        /// <param name="fname">Specifies the name of the file containing the data.</param>
+        /// <param name="regions">Specifies a variable number of objects describing segments of the address space.</param>
+        /// <returns>An array of data arrays, each representing data from one of the individual segments.</returns>
+        /// <exception cref="Exception"></exception>
         public static byte[][] ReadDump(string fname, params IntelHexRegion[] regions)
         {
             int N = regions.Length;
@@ -390,7 +468,7 @@ namespace System.IntelHex
 
                     if (a < MinOffset || (a + count) > MaxOffset)
                     {
-                        throw new Exception($"Offset 0x{a} does not belong to any of the specified regions.");
+                        throw new Exception($"Offset 0x{a:X8} does not belong to any of the specified regions.");
                     }
 
                     long offset = a - regions[region].Offset;
@@ -404,14 +482,13 @@ namespace System.IntelHex
                         offset = a - regions[region].Offset;
                     }
 
-                    
                     if ((offset + count) <= regions[region].Size)
                     {
                         Array.Copy(record.Data, 0, result[region], offset, count);
                     }
                     else
                     {
-                        throw new Exception($"Region[{region}] overflow: cant copy {count} bytes by offset {offset}.");
+                        throw new Exception($"Region[{region}] overflow: cant copy {count} bytes by offset {offset} (0x{offset:X8}).");
                     }
                 }
                 else if (record.Type == IntelHexRecordType.ExtendedLinearAddress)
@@ -434,7 +511,16 @@ namespace System.IntelHex
         #endregion
 
         #region Save
-        public static void SaveBytes(string fname, byte[] dump, long offset = 0, int width = 16, bool end = true)
+        /// <summary>
+        /// Appends an array of bytes to a file in IntelHex format. 
+        /// </summary>
+        /// <param name="fname">File name. The file is appended to, not overwritten.</param>
+        /// <param name="dump">An byte array to save. Saved entirely to a hex file.</param>
+        /// <param name="offset">The initial offset of the bytes to be saved in the hex file.</param>
+        /// <param name="end">Specifies that an end-of-hex file marker should be added after the data being saved.</param>
+        /// <param name="width">Specifies the length of one hex data record.</param>
+        /// <exception cref="Exception">The hex string width is set to more than 255 bytes.</exception>
+        public static void SaveBytes(string fname, byte[] dump, long offset = 0, bool end = true, int width = 16)
         {
             if (width > 255 || width < 0)
             {
@@ -466,12 +552,23 @@ namespace System.IntelHex
             }
         }
 
-        public static void SaveWords(string fname, ushort[] dump, long offset = 0, int width = 8, bool end = true)
+        /// <summary>
+        /// Appends an array of 16-bit words to a file in IntelHex format. 
+        /// </summary>
+        /// <param name="fname">File name. The file is appended to, not overwritten.</param>
+        /// <param name="dump">An array of words to save. Saved entirely to a hex file.</param>
+        /// <param name="offset">The initial offset of the words to be saved in the hex file. Specified as a "word address" - NOT a byte address.</param>
+        /// <param name="end">Specifies that an end-of-hex file marker should be added after the data being saved.</param>
+        /// <param name="width">Specifies the length of one hex data record. Specified in words. The default is 8 words, i.e., 16 bytes per line.</param>
+        /// <exception cref="Exception">The hex string width is set to more than 127 words.</exception>
+        public static void SaveWords(string fname, ushort[] dump, long offset = 0, bool end = true, int width = 8)
         {
             if (width > 127 || width < 0)
             {
                 throw new Exception($"incorrect line width: {width}.");
             }
+
+            offset <<= 1;
 
             using (StreamWriter writer = File.AppendText(fname))
             {
@@ -489,6 +586,172 @@ namespace System.IntelHex
 
                     index  += count;
                     offset += count * 2;
+                }
+
+                if (end)
+                {
+                    writer.Write(":00000001FF");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Appends an array of bytes to a file in IntelHex format, excluding empty values. 
+        /// </summary>
+        /// <param name="fname">File name. The file is appended to, not overwritten.</param>
+        /// <param name="dump">An byte array to save. Saved entirely to a hex file.</param>
+        /// <param name="offset">The initial offset of the bytes to be saved in the hex file.</param>
+        /// <param name="end">Specifies that an end-of-hex file marker should be added after the data being saved.</param>
+        /// <param name="empty">Specifies the value of a byte that will be considered empty. Such bytes will be skipped when saving data to a hex file.</param>
+        /// <param name="width">Specifies the length of one hex data record.</param>
+        /// <exception cref="Exception">The hex string width is set to more than 255 bytes.</exception>
+        public static void SaveBytesReduced(string fname, byte[] dump, long offset, bool end = true, byte empty = 0xFF, int width = 16)
+        {
+            if (width > 255 || width < 0)
+            {
+                throw new Exception($"incorrect line width: {width}.");
+            }
+
+            using (StreamWriter writer = File.AppendText(fname))
+            {
+                long index = 0;
+                int  count = 0;
+
+                byte   crc  = 0;
+                string line = "";
+
+                ushort hadr = (ushort)((offset >> 16) & 0xFFFF);
+
+                while (index < dump.LongLength)
+                {
+                    byte data = dump[index];
+
+                    if (data != empty)
+                    {
+                        if (count == 0)
+                        {
+                            ushort adrl = (ushort)(offset & 0xFFFF);
+                            ushort adrh = (ushort)((offset >> 16) & 0xFFFF);
+
+                            if (adrh != hadr)
+                            {
+                                writer.WriteLine(SaveAddress(adrh));
+                                hadr = adrh;
+                            }
+
+                            crc  = (byte)((adrl >> 8) + (adrl & 0xFF) + (byte)IntelHexRecordType.Data);
+                            line = $"{adrl:X4}{(byte)IntelHexRecordType.Data:X2}";
+                        }
+
+                        crc  += data;
+                        line += data.ToString("X2");
+
+                        count++;
+                    }
+
+                    index++;
+                    offset++;
+
+                    if (count != 0)
+                    {
+                        bool last = index < dump.LongLength ? dump[index] == empty : true;
+
+                        if (count == width || last || (offset & 0xFFFF) == 0x0000)
+                        {
+                            crc  = (byte)((byte)0 - (crc + count));
+                            line = $":{count:X2}" + line + crc.ToString("X2");
+
+                            writer.WriteLine(line);
+
+                            count = 0;
+                        }
+                    }
+                }
+
+                if (end)
+                {
+                    writer.Write(":00000001FF");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Appends an array of 16-bit words to a file in IntelHex format, excluding empty values. 
+        /// </summary>
+        /// <param name="fname">File name. The file is appended to, not overwritten.</param>
+        /// <param name="dump">An array of words to save. Saved entirely to a hex file.</param>
+        /// <param name="offset">The initial offset of the words to be saved in the hex file. Specified as a "word address" - NOT a byte address.</param>
+        /// <param name="end">Specifies that an end-of-hex file marker should be added after the data being saved.</param>
+        /// <param name="empty">Specifies the value of a word that will be considered empty. Such words will be skipped when saving data to a hex file.</param>
+        /// <param name="width">Specifies the length of one hex data record. Specified in words. The default is 8 words, i.e., 16 bytes per line.</param>
+        /// <exception cref="Exception">The hex string width is set to more than 127 words.</exception>
+        public static void SaveWordsReduced(string fname, ushort[] dump, long offset, bool end = true, ushort empty = 0xFFFF, int width = 8)
+        {
+            if (width > 127 || width < 0)
+            {
+                throw new Exception($"incorrect line width: {width}.");
+            }
+
+            offset <<= 1;
+            width   *= 2;
+
+            using (StreamWriter writer = File.AppendText(fname))
+            {
+                long index = 0;
+                int  count = 0;
+
+                byte   crc  = 0;
+                string line = "";
+
+                ushort hadr = (ushort)((offset >> 16) & 0xFFFF);
+
+                while (index < dump.LongLength)
+                {
+                    ushort data = dump[index];
+
+                    if (data != empty)
+                    {
+                        if (count == 0)
+                        {
+                            ushort adrl = (ushort)(offset & 0xFFFF);
+                            ushort adrh = (ushort)((offset >> 16) & 0xFFFF);
+
+                            if (adrh != hadr)
+                            {
+                                writer.WriteLine(SaveAddress(adrh));
+                                hadr = adrh;
+                            }
+
+                            crc  = (byte)((adrl >> 8) + (adrl & 0xFF) + (byte)IntelHexRecordType.Data);
+                            line = $"{adrl:X4}{(byte)IntelHexRecordType.Data:X2}";
+                        }
+
+                        byte l = (byte)(data & 0xFF);
+                        byte h = (byte)(data >> 8);
+
+                        crc  += (byte)(l + h);
+                        line += $"{l:X2}{h:X2}";
+
+                        count += 2;
+                    }
+
+                    index++;
+                    offset += 2;
+
+                    if (count != 0)
+                    {
+                        bool last = index < dump.LongLength ? dump[index] == empty : true;
+
+                        if (count == width || last || (offset & 0xFFFF) == 0x0000)
+                        {
+                            crc = (byte)((byte)0 - (crc + count));
+                            line = $":{count:X2}" + line + crc.ToString("X2");
+
+                            writer.WriteLine(line);
+
+                            count = 0;
+                        }
+                    }
                 }
 
                 if (end)
