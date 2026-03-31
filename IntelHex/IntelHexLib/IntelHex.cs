@@ -1,6 +1,7 @@
 using System;
-using System.IO;
+using System.Collections.Generic;
 using System.Linq;
+using System.IO;
 
 
 namespace System.IntelHex
@@ -43,7 +44,7 @@ namespace System.IntelHex
         public long Size;
 
         /// <summary>
-        /// Initializes a new IntelHexRegion object using the given Offset and size Size.
+        /// Initializes a new IntelHexRegion object using the given Offset and Size.
         /// </summary>
         /// <param name="Offset">The offset of the segment relative to address zero of the segmented address space.</param>
         /// <param name="Size">The size of a segment relative to address zero of the segmented address space.</param>
@@ -53,7 +54,146 @@ namespace System.IntelHex
             this.Size   = Size;
         }
     }
+    
+    /// <summary>
+    /// Defines the data type of the segment.
+    /// </summary>
+    public enum IntelHexSegmentType
+    {
+        Byte,
+        Word
+    }
 
+    /// <summary>
+    /// Represents the enhanced parameters of a segment in a segmented address space.
+    /// </summary>
+    public struct IntelHexSegmentInfo
+    {
+        /// <summary>
+        /// Specifies the data type of the segment.
+        /// </summary>
+        public IntelHexSegmentType Type;
+        /// <summary>
+        /// The offset of the segment relative to address zero of the segmented address space.
+        /// Set according to the data type defined by the value of the Type field.
+        /// </summary>
+        public long                Offset;
+        /// <summary>
+        /// The size of a segment relative to address zero of the segmented address space.
+        /// Set according to the data type defined by the value of the Type field.
+        /// </summary>
+        public long                Size;
+        /// <summary>
+        /// Specifies a 16-bit value that will be used to fill the elements of the output array for which data is missing from the file.
+        /// </summary>
+        public ushort              Empty;
+
+        /// <summary>
+        /// Initializes a new IntelHexSegmentInfo object using the given Type, Offset, Size and Empty data unit value.
+        /// </summary>
+        /// <param name="Offset">The offset of the segment relative to address zero of the segmented address space.</param>
+        /// <param name="Size">The size of a segment relative to address zero of the segmented address space.</param>
+        /// <param name="Type">Segment data type.</param>
+        /// <param name="Empty">Value for initial filling of the output data array.</param>
+        public IntelHexSegmentInfo(long Offset, long Size, IntelHexSegmentType Type = IntelHexSegmentType.Word, ushort Empty = 0xFFFF)
+        {
+            this.Offset = Offset;
+            this.Size   = Size;
+            this.Type   = Type;
+            this.Empty  = Empty;
+        }
+    }
+
+    /// <summary>
+    /// Represents an object containing the data segment of a single segment.
+    /// </summary>
+    public class IntelHexSegment
+    {
+        #region Fields
+        private byte[]   _Data;
+        private ushort[] _Words;
+        #endregion
+
+        #region Ctors
+        internal IntelHexSegment(IntelHexSegmentInfo info)
+        {
+            byte l = (byte)(info.Empty >> 0);
+            byte h = (byte)(info.Empty >> 8);
+
+            if (info.Type == IntelHexSegmentType.Word)
+            {
+                Offset = info.Offset << 1;
+                _Data  = new byte[info.Size << 1];
+
+                for (int i = 0; i < _Data.Length;)
+                {
+                    _Data[i++] = l;
+                    _Data[i++] = h;
+                }
+            }
+            else
+            {
+                Offset = info.Offset;
+                _Data  = new byte[info.Size];
+
+                for (int i = 0; i < info.Size; i++)
+                {
+                    _Data[i] = l;
+                }
+            }
+
+            _Words = null;
+        }
+        #endregion
+
+        #region Properties
+        public long Offset { get; private set; }
+
+        public int ByteLength => _Data.Length;
+
+        public int WordLength => _Data.Length >> 1;
+
+        public byte[] Bytes => _Data;
+
+        public ushort[] Words 
+        { 
+            get
+            {
+                if (_Words == null)
+                {
+                    _Words = new ushort[_Data.Length >> 1];
+
+                    for (int b = 0, w = 0; b < _Data.Length; b += 2)
+                    {
+                        _Words[w++] = BitConverter.ToUInt16( _Data, b);
+                    }
+                }
+
+                return _Words;
+            }
+        }
+        #endregion
+
+        #region Methods
+        public byte GetByte(int index) => _Data[index];
+
+        public ushort GetWord(int index) => Words[index];
+        #endregion
+
+        #region Internal
+        internal bool IsBelong(long address)
+        {
+            long offset = address - Offset;
+            return (-1 < offset && offset < _Data.LongLength);
+        }
+
+        internal void SetBytes(byte[] data, long offset)
+        {
+            Array.Copy(data, 0, _Data, offset, data.Length);
+        }
+        #endregion
+    }
+    
     /// <summary>
     /// Contains methods for working with files in the IntelHex format. 
     /// Reading and writing both individual IntelHex records and entire dumps.
@@ -449,6 +589,7 @@ namespace System.IntelHex
 
             int  region  = 0;
             long address = 0;
+
             for (int line = 0; line < lines.Length; line++)
             {
                 IntelHexRecord record;
@@ -507,6 +648,95 @@ namespace System.IntelHex
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Reads a complex dump containing segmented data.
+        /// </summary>
+        /// <param name="fname">Specifies the name of the file containing the data.</param>
+        /// <param name="segments">Specifies a variable number of objects describing segments of the address space.</param>
+        /// <returns>List of IntelHexSegment type objects, each representing data from one of the individual segments.</returns>
+        /// <exception cref="Exception"></exception>
+        public static List<IntelHexSegment> ReadDump(string fname, params IntelHexSegmentInfo[] segments)
+        {
+            List<IntelHexSegment> dump = new List<IntelHexSegment>();
+            for (int i = 0; i < segments.Length; i++)
+            {
+                dump.Add(new IntelHexSegment(segments[i]));
+            }
+
+            string[] lines;
+            try
+            {
+                lines = File.ReadAllLines(fname);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"\"{fname}\" - file read error: {ex.Message}");
+            }
+
+            long            address = 0;
+            int             seg     = 0;
+            IntelHexSegment segment = dump[seg];
+
+            for (int line = 0; line < lines.Length; line++)
+            {
+                IntelHexRecord record;
+                try
+                {
+                    record = Parse(lines[line]);
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception($"\"{fname}\" - file read error: line{line} {ex.Message}");
+                }
+
+                if (record.Type == IntelHexRecordType.Data)
+                {
+                    long a = address + record.Address;
+
+                    if (!segment.IsBelong(a))
+                    {
+                        seg = dump.FindIndex(s => s.IsBelong(a));
+
+                        if (seg != -1)
+                        {
+                            segment = dump[seg];
+                        }
+                        else
+                        {
+                            throw new Exception($"\"{fname}\" - file read error. line{line} Offset 0x{a:X8} does not belong to any of the specified segments.");
+                        }
+                    }
+
+                    int  count  = record.Data.Length;
+                    long offset = a - segment.Offset;
+
+                    if ((offset + count) <= segment.ByteLength)
+                    {
+                        segment.SetBytes(record.Data, offset);
+                    }
+                    else
+                    {
+                        throw new Exception($"\"{fname}\" - file read error. line{line} Segment[{seg}] overflow: cant copy {count} bytes by offset {offset} (0x{offset:X8}).");
+                    }
+                }
+                else if (record.Type == IntelHexRecordType.ExtendedLinearAddress)
+                {
+                    if (record.Data.Length != 2)
+                    {
+                        throw new Exception($"\"{fname}\" - file read error. line{line} Incorrect ExtendedLinearAddress length={record.Data.Length}.");
+                    }
+
+                    address = (record.Data[0] << 24) | (record.Data[1] << 16);
+                }
+                else if (record.Type == IntelHexRecordType.EndOfFile)
+                {
+                    break;
+                }
+            }
+
+            return dump;
         }
         #endregion
 
@@ -620,7 +850,7 @@ namespace System.IntelHex
                 byte   crc  = 0;
                 string line = "";
 
-                ushort hadr = (ushort)((offset >> 16) & 0xFFFF);
+                ushort hadr = 0; // (ushort)((offset >> 16) & 0xFFFF);
 
                 while (index < dump.LongLength)
                 {
@@ -633,7 +863,7 @@ namespace System.IntelHex
                             ushort adrl = (ushort)(offset & 0xFFFF);
                             ushort adrh = (ushort)((offset >> 16) & 0xFFFF);
 
-                            if (adrh != hadr)
+                            if (adrh != hadr && adrh != 0)
                             {
                                 writer.WriteLine(SaveAddress(adrh));
                                 hadr = adrh;
@@ -703,7 +933,7 @@ namespace System.IntelHex
                 byte   crc  = 0;
                 string line = "";
 
-                ushort hadr = (ushort)((offset >> 16) & 0xFFFF);
+                ushort hadr = 0; //(ushort)((offset >> 16) & 0xFFFF);
 
                 while (index < dump.LongLength)
                 {
@@ -716,7 +946,7 @@ namespace System.IntelHex
                             ushort adrl = (ushort)(offset & 0xFFFF);
                             ushort adrh = (ushort)((offset >> 16) & 0xFFFF);
 
-                            if (adrh != hadr)
+                            if (adrh != hadr && adrh != 0)
                             {
                                 writer.WriteLine(SaveAddress(adrh));
                                 hadr = adrh;
@@ -763,74 +993,3 @@ namespace System.IntelHex
         #endregion
     }
 }
-
-
-/*
-public enum IntelHexSegmentType
-{
-    Byte,
-    Word
-}
-
-public struct IntelHexSegmentInfo
-{
-    public IntelHexSegmentType Type;
-    public long                Offset;
-    public long                Size;
-    public ushort              Empty;
-}
-
-public abstract class IntelHexSegment<T>
-{
-    public long Offset { get; protected set; }
-
-    public abstract T[] Data { get; }
-}
-
-public class IntelHexByteSegment : IntelHexSegment<byte>
-{
-    private byte[] _Data;
-
-    public IntelHexByteSegment(IntelHexSegmentInfo info)
-    {
-        this.Offset = info.Offset;
-        this._Data  = new byte[info.Size];
-
-        for (int i = 0; i < info.Size; i++)
-        {
-            _Data[i] = (byte)info.Empty;
-        }
-    }
-
-    public override byte[] Data => _Data;
-    
-    public byte this[int index] => _Data[index];
-}
-
-public class IntelHexWordSegment : IntelHexSegment<ushort>
-{
-    private ushort[] _Data;
-
-    public IntelHexWordSegment(IntelHexSegmentInfo info)
-    {
-        this.Offset = info.Offset;
-        this._Data = new ushort[info.Size];
-
-        for (int i = 0; i < info.Size; i++)
-        {
-            _Data[i] = info.Empty;
-        }
-    }
-
-    public override ushort[] Data => _Data;
-
-    public ushort this[int index] => _Data[index];
-
-    public byte GetByte(int index)
-    {
-        ushort w = _Data[index>>1];
-        return (byte)((index & 1) == 0 ? w & 0xFF : w >> 8); 
-    }
-}
-
-*/
